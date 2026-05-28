@@ -62,12 +62,6 @@ App: http://localhost:3000
 | Database | SQLite (planned)        |
 | LLMs     | Ollama support (future) |
 
-## Documentation
-
-- [Architecture](docs/architecture.md)
-- [Memory model](docs/memory_model.md)
-- [Roadmap](docs/roadmap.md)
-
 ## Development notes
 
 - No authentication in the initial scaffold.

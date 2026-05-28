@@ -6,6 +6,7 @@ import uuid
 from copy import deepcopy
 from datetime import datetime
 
+from app.memory.thought_utils import apply_salience_decay, is_active_thought
 from app.models.schemas import ThoughtCreate, ThoughtRead
 
 WORKING_MEMORY_MAX_SIZE = 7
@@ -40,11 +41,31 @@ class WorkingMemoryManager:
         Returns:
             ThoughtRead: The stored thought object.
         """
+        thought, _evicted = self.add_thought_with_eviction(payload, now, thought_id)
+        return thought
+
+    def add_thought_with_eviction(
+        self,
+        payload: ThoughtCreate,
+        now: datetime | None = None,
+        thought_id: str | None = None,
+    ) -> tuple[ThoughtRead, ThoughtRead | None]:
+        """Add a thought and return any evicted thought.
+
+        Args:
+            payload: Thought creation payload.
+            now: Reference time used for timestamps and decay.
+            thought_id: Optional deterministic identifier for tests.
+
+        Returns:
+            tuple[ThoughtRead, ThoughtRead | None]: Added thought and optional evictee.
+        """
         current_time = now or datetime.now()
         self.decay_salience(current_time)
 
+        evicted = None
         if len(self._thoughts) >= self.max_size:
-            self._evict_lowest_salience()
+            evicted = self._evict_lowest_salience()
 
         thought = ThoughtRead(
             id=thought_id or str(uuid.uuid4()),
@@ -61,7 +82,37 @@ class WorkingMemoryManager:
             metadata_json=deepcopy(payload.metadata_json),
         )
         self._thoughts[thought.id] = thought
-        return thought.model_copy(deep=True)
+        return thought.model_copy(deep=True), evicted
+
+    def restore_thought(
+        self,
+        thought: ThoughtRead,
+        now: datetime | None = None,
+    ) -> tuple[ThoughtRead, ThoughtRead | None]:
+        """Return a backlog thought to working memory.
+
+        Args:
+            thought: Thought to restore.
+            now: Reference time for timestamps.
+
+        Returns:
+            tuple[ThoughtRead, ThoughtRead | None]: Restored thought and optional evictee.
+        """
+        current_time = now or datetime.now()
+        evicted = None
+
+        if thought.id not in self._thoughts and len(self._thoughts) >= self.max_size:
+            evicted = self._evict_lowest_salience()
+
+        restored = thought.model_copy(
+            update={
+                "times_resurfaced": thought.times_resurfaced + 1,
+                "last_accessed": current_time,
+            },
+            deep=True,
+        )
+        self._thoughts[restored.id] = restored
+        return restored.model_copy(deep=True), evicted
 
     def remove_thought(self, thought_id: str) -> bool:
         """Remove a thought from working memory.
@@ -73,6 +124,26 @@ class WorkingMemoryManager:
             bool: True when the thought existed and was removed.
         """
         return self._thoughts.pop(thought_id, None) is not None
+
+    def remove_inactive(self, now: datetime | None = None) -> list[ThoughtRead]:
+        """Remove expired or resolved thoughts from working memory.
+
+        Args:
+            now: Reference time for inactive evaluation.
+
+        Returns:
+            list[ThoughtRead]: Removed thoughts in deterministic order.
+        """
+        current_time = now or datetime.now()
+        removed: list[ThoughtRead] = []
+
+        for thought_id in sorted(self._thoughts):
+            thought = self._thoughts[thought_id]
+            if is_active_thought(thought, current_time):
+                continue
+            removed.append(self._thoughts.pop(thought_id).model_copy(deep=True))
+
+        return removed
 
     def update_salience(
         self,
@@ -120,7 +191,7 @@ class WorkingMemoryManager:
         active = [
             thought.model_copy(deep=True)
             for thought in self._thoughts.values()
-            if self._is_active(thought, current_time)
+            if is_active_thought(thought, current_time)
         ]
         active.sort(key=lambda thought: (-thought.salience, thought.id))
         return active
@@ -137,23 +208,25 @@ class WorkingMemoryManager:
         current_time = now or datetime.now()
 
         for thought_id, thought in list(self._thoughts.items()):
-            elapsed_hours = (
-                current_time - thought.last_accessed
-            ).total_seconds() / 3600.0
-            if elapsed_hours <= 0:
-                continue
+            self._thoughts[thought_id] = apply_salience_decay(
+                thought,
+                current_time,
+                SALIENCE_DECAY_PER_HOUR,
+            )
 
-            decayed_salience = max(
-                0.0,
-                thought.salience - (SALIENCE_DECAY_PER_HOUR * elapsed_hours),
-            )
-            self._thoughts[thought_id] = thought.model_copy(
-                update={
-                    "salience": decayed_salience,
-                    "last_accessed": current_time,
-                },
-                deep=True,
-            )
+    def get(self, thought_id: str) -> ThoughtRead | None:
+        """Fetch a working-memory thought by identifier.
+
+        Args:
+            thought_id: Thought identifier.
+
+        Returns:
+            ThoughtRead | None: Stored thought when found.
+        """
+        thought = self._thoughts.get(thought_id)
+        if thought is None:
+            return None
+        return thought.model_copy(deep=True)
 
     def size(self) -> int:
         """Return the number of thoughts currently held in working memory.
@@ -163,30 +236,17 @@ class WorkingMemoryManager:
         """
         return len(self._thoughts)
 
-    def _evict_lowest_salience(self) -> None:
-        """Remove the lowest-salience thought, breaking ties by thought id."""
-        if not self._thoughts:
-            return
-
-        victim_id = min(
-            self._thoughts.values(),
-            key=lambda thought: (thought.salience, thought.id),
-        ).id
-        del self._thoughts[victim_id]
-
-    @staticmethod
-    def _is_active(thought: ThoughtRead, now: datetime) -> bool:
-        """Check whether a thought is unresolved and not expired.
-
-        Args:
-            thought: Thought to evaluate.
-            now: Reference time for expiry comparison.
+    def _evict_lowest_salience(self) -> ThoughtRead | None:
+        """Remove and return the lowest-salience thought.
 
         Returns:
-            bool: True when the thought is active.
+            ThoughtRead | None: Evicted thought, if any were present.
         """
-        if thought.resolved:
-            return False
-        if thought.expires_at is not None and thought.expires_at <= now:
-            return False
-        return True
+        if not self._thoughts:
+            return None
+
+        victim = min(
+            self._thoughts.values(),
+            key=lambda thought: (thought.salience, thought.id),
+        )
+        return self._thoughts.pop(victim.id).model_copy(deep=True)
