@@ -74,7 +74,7 @@ def health_check() -> dict[str, str]:
     Returns:
         dict[str, str]: Health payload with status and service name.
     """
-    return {"status": "ok", "service": "attentionos-backend"}
+    return {"status": "ok", "service": "laguna-backend"}
 
 
 @router.get("/cognition/config")
@@ -164,7 +164,7 @@ def seed_demo_thoughts(
     """Seed demo thoughts for UI development without LLM calls."""
     demo_thoughts = [
         ThoughtCreate(
-            content="Finish AttentionOS memory model draft",
+            content="Finish Laguna memory model draft",
             source="user_input",
             salience=0.82,
             novelty=0.2,

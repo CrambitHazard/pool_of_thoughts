@@ -1,1 +1,1 @@
-"""AttentionOS backend application package."""
+"""Laguna backend application package."""

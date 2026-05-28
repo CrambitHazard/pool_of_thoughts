@@ -1,4 +1,4 @@
-"""FastAPI application entry point for AttentionOS."""
+"""FastAPI application entry point for Laguna."""
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 
 app = FastAPI(
-    title="AttentionOS",
+    title="Laguna",
     description="Persistent AI cognition system",
     version="0.1.0",
 )

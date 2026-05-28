@@ -7,11 +7,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """AttentionOS runtime configuration."""
+    """Laguna runtime configuration."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
-        env_prefix="ATTENTIONOS_",
+        env_prefix="LAGUNA_",
         extra="ignore",
     )
 

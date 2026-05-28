@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.models.base import Base
 
-DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "attentionos.db"
+DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "laguna.db"
 
 
 def get_engine(db_path: Path | str | None = None):

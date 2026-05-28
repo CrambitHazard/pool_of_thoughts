@@ -1,6 +1,6 @@
-# AttentionOS
+# Laguna
 
-AttentionOS is a persistent AI cognition system. It provides a modular backend for memory, reasoning, and orchestration, with a Next.js frontend for interaction.
+Laguna is a persistent AI cognition system. It provides a modular backend for memory, reasoning, and orchestration, with a Next.js frontend for interaction.
 
 ## Repository structure
 
@@ -68,7 +68,7 @@ Use **Load Demo** in the UI to populate working memory without Ollama. Use **Inj
 |----------|-------------------------|
 | Backend  | Python, FastAPI         |
 | Frontend | Next.js, TypeScript     |
-| Database | SQLite (planned)        |
+| Database | SQLite                  |
 | LLMs     | Ollama (`gemma:2b` default) |
 
 ## Ollama configuration
@@ -79,14 +79,16 @@ Install [Ollama](https://ollama.com/) and pull the default model:
 ollama pull gemma:2b
 ```
 
-Optional environment variables (prefix `ATTENTIONOS_`):
+Optional environment variables (prefix `LAGUNA_`):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ATTENTIONOS_OLLAMA_MODEL` | `gemma:2b` | Model name |
-| `ATTENTIONOS_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API URL |
-| `ATTENTIONOS_OLLAMA_TEMPERATURE` | `0.0` | Sampling temperature |
-| `ATTENTIONOS_OLLAMA_MAX_RELATED_THOUGHTS` | `3` | Related thoughts cap |
+| `LAGUNA_OLLAMA_MODEL` | `gemma:2b` | Model name |
+| `LAGUNA_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API URL |
+| `LAGUNA_OLLAMA_TEMPERATURE` | `0.0` | Sampling temperature |
+| `LAGUNA_OLLAMA_MAX_RELATED_THOUGHTS` | `3` | Related thoughts cap |
+| `LAGUNA_REFLECTION_INTERVAL_MINUTES` | `60.0` | Reflection loop interval |
+| `LAGUNA_REFLECTION_LOOKBACK_HOURS` | `168.0` | Consolidation lookback window |
 
 Extract thoughts from raw input:
 
@@ -95,6 +97,17 @@ curl -X POST http://localhost:8000/api/cognition/extract \
   -H "Content-Type: application/json" \
   -d "{\"message\": \"I need to finish the memory model draft\"}"
 ```
+
+## Internal agents
+
+Laguna uses two LLM-backed internal agents:
+
+| Agent | Module | Purpose |
+|-------|--------|---------|
+| Thought Extraction | `app/cognitive/prompts.py` | Parse raw input into structured thought objects |
+| Consolidation | `app/cognitive/reflection_prompts.py` | Compress recurring episodic traces into semantic memory |
+
+Shared prompt constraints live in `app/cognitive/prompt_context.py`.
 
 ## Development notes
 
