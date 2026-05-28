@@ -125,6 +125,20 @@ class WorkingMemoryManager:
         """
         return self._thoughts.pop(thought_id, None) is not None
 
+    def pop_thought(self, thought_id: str) -> ThoughtRead | None:
+        """Remove and return a thought from working memory.
+
+        Args:
+            thought_id: Identifier of the thought to remove.
+
+        Returns:
+            ThoughtRead | None: Removed thought when found.
+        """
+        thought = self._thoughts.pop(thought_id, None)
+        if thought is None:
+            return None
+        return thought.model_copy(deep=True)
+
     def remove_inactive(self, now: datetime | None = None) -> list[ThoughtRead]:
         """Remove expired or resolved thoughts from working memory.
 
@@ -227,6 +241,44 @@ class WorkingMemoryManager:
         if thought is None:
             return None
         return thought.model_copy(deep=True)
+
+    def all_thoughts(self) -> list[ThoughtRead]:
+        """Return all thoughts currently held in working memory.
+
+        Returns:
+            list[ThoughtRead]: Stored thoughts sorted by id.
+        """
+        thoughts = [thought.model_copy(deep=True) for thought in self._thoughts.values()]
+        thoughts.sort(key=lambda thought: thought.id)
+        return thoughts
+
+    def set_thought(self, thought: ThoughtRead) -> ThoughtRead:
+        """Insert or replace a thought in working memory.
+
+        Args:
+            thought: Thought object to store.
+
+        Returns:
+            ThoughtRead: Stored copy of the thought.
+        """
+        stored = thought.model_copy(deep=True)
+        self._thoughts[stored.id] = stored
+        return stored.model_copy(deep=True)
+
+    def get_weakest(self) -> ThoughtRead | None:
+        """Return the lowest-salience thought in working memory.
+
+        Returns:
+            ThoughtRead | None: Weakest thought when memory is not empty.
+        """
+        if not self._thoughts:
+            return None
+
+        weakest = min(
+            self._thoughts.values(),
+            key=lambda thought: (thought.salience, thought.id),
+        )
+        return weakest.model_copy(deep=True)
 
     def size(self) -> int:
         """Return the number of thoughts currently held in working memory.

@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from app.cognitive.arbitrator import AttentionArbitrator
 from app.cognitive.resurfacing import ResurfacingStrategy
 from app.memory.backlog import BacklogMemoryManager
 from app.memory.working_memory import WorkingMemoryManager
@@ -34,6 +35,7 @@ class CognitiveLoop:
         working_memory: WorkingMemoryManager,
         backlog: BacklogMemoryManager,
         strategy: ResurfacingStrategy | None = None,
+        arbitrator: AttentionArbitrator | None = None,
         interval_minutes: float = 5.0,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
@@ -49,6 +51,7 @@ class CognitiveLoop:
         self.working_memory = working_memory
         self.backlog = backlog
         self.strategy = strategy or ResurfacingStrategy()
+        self.arbitrator = arbitrator or AttentionArbitrator()
         self.interval_minutes = interval_minutes
         self._clock = clock or datetime.now
         self._running = False
@@ -81,14 +84,14 @@ class CognitiveLoop:
             ThoughtRead: Thought stored in working memory.
         """
         current_time = now or self._clock()
-        thought, evicted = self.working_memory.add_thought_with_eviction(
+        result = self.arbitrator.arbitrate(
+            self.working_memory,
+            self.backlog,
             payload,
             now=current_time,
             thought_id=thought_id,
         )
-        if evicted is not None:
-            self.backlog.enqueue(evicted)
-        return thought
+        return result.thought
 
     def tick(self, now: datetime | None = None) -> CognitiveLoopTickResult:
         """Run one cognitive loop iteration.
