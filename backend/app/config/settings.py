@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     reflection_min_cluster_size: int = 2
     reflection_max_clusters_per_run: int = 5
     reflection_max_thoughts: int = 100
+    graph_hop_decay: float = 0.5
+    graph_max_hops: int = 3
+    graph_activation_boost_factor: float = 0.1
+    graph_auto_link_threshold: float = 0.45
+    graph_cluster_min_size: int = 2
+    graph_cluster_limit: int = 100
 
 
 @lru_cache

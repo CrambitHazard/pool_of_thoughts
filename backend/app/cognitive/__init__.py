@@ -14,7 +14,6 @@ from app.cognitive.conflict import (
 from app.cognitive.loop import CognitiveLoop, CognitiveLoopTickResult
 from app.cognitive.prompt_context import LAGUNA_SYSTEM_NAME
 from app.cognitive.prompts import EXTRACTION_SYSTEM_PROMPT, build_extraction_prompt
-from app.cognitive.reflection import ReflectionEngine, ReflectionResult
 from app.cognitive.reflection_prompts import REFLECTION_SYSTEM_PROMPT, build_abstraction_prompt
 from app.cognitive.resurfacing import (
     NOVELTY_THRESHOLD,
@@ -47,8 +46,6 @@ __all__ = [
     "REPEATED_RELEVANCE_MIN_RESURFACES",
     "REPEATED_RELEVANCE_MIN_SALIENCE",
     "REFLECTION_SYSTEM_PROMPT",
-    "ReflectionEngine",
-    "ReflectionResult",
     "ResurfacingStrategy",
     "ThoughtConflictResolver",
     "ThoughtExtractionError",

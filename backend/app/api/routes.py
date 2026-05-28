@@ -9,6 +9,7 @@ from app.api.deps import (
     get_consolidation_service,
     get_session_maker,
     get_thought_extraction_service,
+    get_thought_graph,
 )
 from app.api.schemas import (
     ActivityEventRead,
@@ -20,7 +21,17 @@ from app.cognitive.thought_extraction import ThoughtExtractionError, ThoughtExtr
 from app.config.settings import Settings
 from app.memory.abstraction_repository import MemoryAbstractionRepository
 from app.memory.consolidation import ConsolidationService
-from app.models.schemas import MemoryAbstractionRead, ThoughtCreate
+from app.memory.graph import ThoughtGraph
+from app.memory.graph_repository import ThoughtGraphRepository
+from app.models.schemas import (
+    ActivationRequest,
+    ActivationResponse,
+    MemoryAbstractionRead,
+    ThoughtClusterRead,
+    ThoughtCreate,
+    ThoughtLinkCreate,
+    ThoughtLinkRead,
+)
 from app.services.cognition_runtime import CognitionRuntime
 from app.services.database import init_db
 from app.services.llm.base import LLMProviderError
@@ -95,6 +106,9 @@ def cognition_config(settings: Settings = Depends(get_app_settings)) -> dict[str
         "ollama_max_related_thoughts": settings.ollama_max_related_thoughts,
         "reflection_interval_minutes": settings.reflection_interval_minutes,
         "reflection_lookback_hours": settings.reflection_lookback_hours,
+        "graph_hop_decay": settings.graph_hop_decay,
+        "graph_max_hops": settings.graph_max_hops,
+        "graph_activation_boost_factor": settings.graph_activation_boost_factor,
     }
 
 
@@ -224,3 +238,71 @@ def list_abstractions() -> list[MemoryAbstractionRead]:
         return repository.list_all()
     finally:
         session.close()
+
+
+@router.post("/graph/link", response_model=ThoughtLinkRead)
+def create_graph_link(
+    payload: ThoughtLinkCreate,
+    graph: ThoughtGraph = Depends(get_thought_graph),
+) -> ThoughtLinkRead:
+    """Create or update a weighted association between thoughts."""
+    return graph.link(
+        payload.source_thought_id,
+        payload.target_thought_id,
+        payload.relation,
+        weight=payload.weight,
+        metadata_json=payload.metadata_json,
+    )
+
+
+@router.get("/graph/thoughts/{thought_id}/neighbors", response_model=list[ThoughtLinkRead])
+def graph_neighbors(
+    thought_id: str,
+    graph: ThoughtGraph = Depends(get_thought_graph),
+) -> list[ThoughtLinkRead]:
+    """Return edges connected to a thought."""
+    return graph.neighbors(thought_id)
+
+
+@router.post("/graph/thoughts/{thought_id}/activate", response_model=ActivationResponse)
+def activate_thought(
+    thought_id: str,
+    payload: ActivationRequest | None = None,
+    graph: ThoughtGraph = Depends(get_thought_graph),
+) -> ActivationResponse:
+    """Spread activation from a source thought through the graph."""
+    request = payload or ActivationRequest()
+    result = graph.activate(thought_id, strength=request.strength)
+    return ActivationResponse(
+        source_id=result.source_id,
+        initial_strength=result.initial_strength,
+        max_hops=result.max_hops,
+        activations=result.activations,
+    )
+
+
+@router.post("/graph/cluster", response_model=list[ThoughtClusterRead])
+def cluster_graph_thoughts(
+    graph: ThoughtGraph = Depends(get_thought_graph),
+    settings: Settings = Depends(get_app_settings),
+) -> list[ThoughtClusterRead]:
+    """Detect recurring themes and persist clusters with intra-cluster links."""
+    return graph.cluster_recent_thoughts(limit=settings.graph_cluster_limit)
+
+
+@router.get("/graph/clusters", response_model=list[ThoughtClusterRead])
+def list_graph_clusters() -> list[ThoughtClusterRead]:
+    """List persisted theme clusters."""
+    init_db()
+    session = get_session_maker()()
+    try:
+        repository = ThoughtGraphRepository(session)
+        return repository.list_clusters()
+    finally:
+        session.close()
+
+
+@router.get("/graph/stats")
+def graph_stats(graph: ThoughtGraph = Depends(get_thought_graph)) -> dict[str, int]:
+    """Return basic associative graph statistics."""
+    return graph.stats()

@@ -3,7 +3,9 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.models.graph_types import RelationType
 
 
 class ThoughtCreate(BaseModel):
@@ -69,3 +71,79 @@ class MemoryAbstractionRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     metadata_json: dict[str, Any]
+
+
+class ThoughtLinkCreate(BaseModel):
+    """Payload for creating a weighted thought association."""
+
+    source_thought_id: str
+    target_thought_id: str
+    relation: RelationType
+    weight: float = Field(default=0.5, ge=0.0, le=1.0)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class ThoughtLinkRead(BaseModel):
+    """Persisted edge in the associative thought graph."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    source_thought_id: str
+    target_thought_id: str
+    relation_type: str
+    weight: float
+    created_at: datetime
+    updated_at: datetime
+    metadata_json: dict[str, Any]
+
+    @property
+    def relation(self) -> RelationType:
+        """Return the typed relation enum.
+
+        Returns:
+            RelationType: Parsed relation type.
+        """
+        return RelationType(self.relation_type)
+
+
+class ThoughtClusterRead(BaseModel):
+    """Persisted recurring theme cluster."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    label: str
+    thought_ids: list[str]
+    cohesion: float
+    created_at: datetime
+    updated_at: datetime
+    metadata_json: dict[str, Any]
+
+
+class ActivationRequest(BaseModel):
+    """Request payload for spreading activation."""
+
+    strength: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+class ActivationResponse(BaseModel):
+    """Spreading activation result."""
+
+    source_id: str
+    initial_strength: float
+    max_hops: int
+    activations: dict[str, float]
+
+    @field_validator("activations")
+    @classmethod
+    def round_activations(cls, value: dict[str, float]) -> dict[str, float]:
+        """Round activation values for stable API output.
+
+        Args:
+            value: Raw activation map.
+
+        Returns:
+            dict[str, float]: Rounded activation map.
+        """
+        return {key: round(strength, 6) for key, strength in value.items()}

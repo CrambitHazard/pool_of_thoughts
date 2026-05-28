@@ -18,6 +18,7 @@ ActivityType = Literal[
     "tick_complete",
     "reflection_complete",
     "input_received",
+    "graph_activated",
 ]
 
 

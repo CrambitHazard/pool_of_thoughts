@@ -11,7 +11,9 @@ from typing import Literal
 from app.cognitive.arbitrator import AttentionResult
 from app.cognitive.loop import CognitiveLoop, CognitiveLoopTickResult
 from app.cognitive.thought_extraction import ThoughtExtractionService
+from app.config.settings import get_settings
 from app.memory.backlog import BacklogMemoryManager
+from app.memory.graph import ThoughtGraph
 from app.memory.working_memory import WORKING_MEMORY_MAX_SIZE, WorkingMemoryManager
 from app.models.schemas import ThoughtCreate, ThoughtRead
 
@@ -25,6 +27,7 @@ ActivityType = Literal[
     "tick_complete",
     "reflection_complete",
     "input_received",
+    "graph_activated",
 ]
 
 
@@ -58,18 +61,21 @@ class CognitionRuntime:
     def __init__(
         self,
         extraction_service: ThoughtExtractionService | None = None,
+        thought_graph: ThoughtGraph | None = None,
         max_activity: int = 50,
     ) -> None:
         """Initialize runtime memory stores and loops.
 
         Args:
             extraction_service: Optional thought extraction service.
+            thought_graph: Optional associative graph for linking and activation.
             max_activity: Maximum activity feed entries to retain.
         """
         self.working_memory = WorkingMemoryManager()
         self.backlog = BacklogMemoryManager()
         self.loop = CognitiveLoop(self.working_memory, self.backlog)
         self.extraction_service = extraction_service
+        self.thought_graph = thought_graph
         self.max_activity = max_activity
         self._activity: deque[ActivityEvent] = deque(maxlen=max_activity)
 
@@ -148,6 +154,7 @@ class CognitionRuntime:
 
         result = self.loop.tick(now=current_time)
         self._log_tick_events(result, before_working, before_backlog, current_time)
+        self._spread_activation(current_time)
 
         return self.get_state(current_time)
 
@@ -188,6 +195,7 @@ class CognitionRuntime:
             thought_id=thought_id,
         )
         self._log_attention_result(result)
+        self._register_graph_links(result.thought, now)
         return result
 
     def _log_attention_result(self, result: AttentionResult) -> None:
@@ -328,3 +336,59 @@ class CognitionRuntime:
                 target_panel=target_panel,
             )
         )
+
+    def _register_graph_links(self, thought: ThoughtRead, now: datetime) -> None:
+        """Register a thought in the associative graph and auto-link similar items.
+
+        Args:
+            thought: Thought added to working memory.
+            now: Reference timestamp.
+
+        Returns:
+            None
+        """
+        if self.thought_graph is None:
+            return
+
+        candidates = self.working_memory.all_thoughts() + self.backlog.list_active(now)
+        self.thought_graph.auto_link_thought(thought, candidates, now=now)
+
+    def _spread_activation(self, now: datetime) -> None:
+        """Spread activation from the strongest working-memory thought.
+
+        Args:
+            now: Reference timestamp for backlog filtering.
+
+        Returns:
+            None
+        """
+        if self.thought_graph is None:
+            return
+
+        active = self.working_memory.get_active_thoughts(now)
+        if not active:
+            return
+
+        source = max(active, key=lambda thought: (thought.salience, thought.id))
+        activation = self.thought_graph.activate(source.id, strength=source.salience)
+        settings = get_settings()
+        boosted = self.thought_graph.apply_activation_to_salience(
+            activation,
+            self.working_memory.all_thoughts(),
+            boost_factor=settings.graph_activation_boost_factor,
+        )
+
+        changed = 0
+        for thought in boosted:
+            existing = self.working_memory.get(thought.id)
+            if existing is None or existing.salience == thought.salience:
+                continue
+            self.working_memory.set_thought(thought)
+            changed += 1
+
+        if changed:
+            self._log(
+                "graph_activated",
+                f"Spread activation from {source.id[:8]} boosted {changed} linked thoughts",
+                thought_id=source.id,
+            )

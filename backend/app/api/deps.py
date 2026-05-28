@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.cognitive.thought_extraction import ThoughtExtractionService
 from app.config.settings import Settings, get_settings
 from app.memory.consolidation import ConsolidationService
+from app.memory.graph import ThoughtGraph
+from app.memory.graph.clustering import ClusteringConfig
 from app.services.cognition_runtime import CognitionRuntime
 from app.services.database import get_session_factory
 from app.services.llm.factory import create_llm_provider
@@ -47,13 +49,32 @@ def get_consolidation_service() -> ConsolidationService:
 
 
 @lru_cache
+def get_thought_graph() -> ThoughtGraph:
+    """Return a cached associative thought graph.
+
+    Returns:
+        ThoughtGraph: Configured graph with persistence and activation.
+    """
+    settings = get_settings()
+    return ThoughtGraph(
+        get_session_maker(),
+        hop_decay=settings.graph_hop_decay,
+        max_hops=settings.graph_max_hops,
+        clustering_config=ClusteringConfig(min_cluster_size=settings.graph_cluster_min_size),
+    )
+
+
+@lru_cache
 def get_cognition_runtime() -> CognitionRuntime:
     """Return the shared in-process cognition runtime.
 
     Returns:
         CognitionRuntime: Live cognition state manager.
     """
-    return CognitionRuntime(extraction_service=get_thought_extraction_service())
+    return CognitionRuntime(
+        extraction_service=get_thought_extraction_service(),
+        thought_graph=get_thought_graph(),
+    )
 
 
 def get_app_settings() -> Settings:
