@@ -53,6 +53,15 @@ npm run dev
 
 App: http://localhost:3000
 
+Set the backend URL for the UI:
+
+```bash
+# frontend/.env.local
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+Use **Load Demo** in the UI to populate working memory without Ollama. Use **Inject** for LLM-backed thought extraction.
+
 ## Tech stack
 
 | Layer    | Technology              |
