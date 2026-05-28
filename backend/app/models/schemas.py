@@ -42,3 +42,30 @@ class ThoughtRead(BaseModel):
     times_resurfaced: int
     last_accessed: datetime
     metadata_json: dict[str, Any]
+
+
+class MemoryAbstractionCreate(BaseModel):
+    """Payload for storing a consolidated semantic memory."""
+
+    summary: str = Field(min_length=1, max_length=500)
+    theme: str = Field(min_length=1, max_length=255)
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    support_count: int = Field(default=1, ge=1)
+    source_thought_ids: list[str] = Field(default_factory=list)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class MemoryAbstractionRead(BaseModel):
+    """Compressed semantic memory returned from consolidation."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    summary: str
+    theme: str
+    confidence: float
+    support_count: int
+    source_thought_ids: list[str]
+    created_at: datetime
+    updated_at: datetime
+    metadata_json: dict[str, Any]

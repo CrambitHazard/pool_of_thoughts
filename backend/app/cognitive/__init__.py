@@ -12,6 +12,7 @@ from app.cognitive.conflict import (
     ThoughtConflictResolver,
 )
 from app.cognitive.loop import CognitiveLoop, CognitiveLoopTickResult
+from app.cognitive.reflection import ReflectionEngine, ReflectionResult
 from app.cognitive.resurfacing import (
     NOVELTY_THRESHOLD,
     REPEATED_RELEVANCE_MIN_RESURFACES,
@@ -40,6 +41,8 @@ __all__ = [
     "NOVELTY_THRESHOLD",
     "REPEATED_RELEVANCE_MIN_RESURFACES",
     "REPEATED_RELEVANCE_MIN_SALIENCE",
+    "ReflectionEngine",
+    "ReflectionResult",
     "ResurfacingStrategy",
     "ThoughtConflictResolver",
     "ThoughtExtractionError",

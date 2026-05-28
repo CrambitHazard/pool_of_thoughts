@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     ollama_seed: int = 42
     ollama_timeout_seconds: float = 120.0
     ollama_max_related_thoughts: int = 3
+    reflection_interval_minutes: float = 60.0
+    reflection_lookback_hours: float = 168.0
+    reflection_min_cluster_size: int = 2
+    reflection_max_clusters_per_run: int = 5
+    reflection_max_thoughts: int = 100
 
 
 @lru_cache

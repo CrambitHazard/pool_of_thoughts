@@ -116,3 +116,66 @@ class ThoughtRepository:
         self.session.delete(thought)
         self.session.commit()
         return True
+
+    def list_recent(
+        self,
+        since: datetime | None = None,
+        limit: int = 100,
+        exclude_consolidated: bool = True,
+    ) -> list[ThoughtRead]:
+        """List recent thoughts for reflection and consolidation.
+
+        Args:
+            since: Optional lower bound for created_at.
+            limit: Maximum number of thoughts to return.
+            exclude_consolidated: Skip thoughts already linked to abstractions.
+
+        Returns:
+            list[ThoughtRead]: Recent thought records ordered oldest first.
+        """
+        query = self.session.query(Thought)
+        if since is not None:
+            query = query.filter(Thought.created_at >= since)
+        rows = query.order_by(Thought.created_at.asc()).limit(limit).all()
+
+        thoughts: list[ThoughtRead] = []
+        for row in rows:
+            thought = ThoughtRead.model_validate(row)
+            if exclude_consolidated and thought.metadata_json.get("consolidated"):
+                continue
+            thoughts.append(thought)
+        return thoughts
+
+    def mark_consolidated(
+        self,
+        thought_ids: list[str],
+        abstraction_id: str,
+        now: datetime | None = None,
+    ) -> int:
+        """Mark source thoughts as consolidated into long-term memory.
+
+        Args:
+            thought_ids: Thought ids absorbed by an abstraction.
+            abstraction_id: Resulting abstraction identifier.
+            now: Timestamp recorded in thought metadata.
+
+        Returns:
+            int: Number of thoughts updated.
+        """
+        current_time = now or datetime.now()
+        updated = 0
+
+        for thought_id in thought_ids:
+            thought = self.session.get(Thought, thought_id)
+            if thought is None:
+                continue
+            metadata = dict(thought.metadata_json)
+            metadata["consolidated"] = True
+            metadata["abstraction_id"] = abstraction_id
+            metadata["consolidated_at"] = current_time.isoformat()
+            thought.metadata_json = metadata
+            updated += 1
+
+        if updated:
+            self.session.commit()
+        return updated
