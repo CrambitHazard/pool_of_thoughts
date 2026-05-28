@@ -7,6 +7,7 @@ from app.api.deps import (
     get_app_settings,
     get_cognition_runtime,
     get_consolidation_service,
+    get_context_engine,
     get_session_maker,
     get_thought_extraction_service,
     get_thought_graph,
@@ -14,9 +15,11 @@ from app.api.deps import (
 from app.api.schemas import (
     ActivityEventRead,
     CognitionStateResponse,
+    ContextSnapshotResponse,
     ThoughtExtractionResponse,
     UserMessageInput,
 )
+from app.cognitive.context import ContextEngine
 from app.cognitive.thought_extraction import ThoughtExtractionError, ThoughtExtractionService
 from app.config.settings import Settings
 from app.memory.abstraction_repository import MemoryAbstractionRepository
@@ -109,6 +112,8 @@ def cognition_config(settings: Settings = Depends(get_app_settings)) -> dict[str
         "graph_hop_decay": settings.graph_hop_decay,
         "graph_max_hops": settings.graph_max_hops,
         "graph_activation_boost_factor": settings.graph_activation_boost_factor,
+        "context_recalc_enabled": settings.context_recalc_enabled,
+        "context_recalc_interval_minutes": settings.context_recalc_interval_minutes,
     }
 
 
@@ -306,3 +311,29 @@ def list_graph_clusters() -> list[ThoughtClusterRead]:
 def graph_stats(graph: ThoughtGraph = Depends(get_thought_graph)) -> dict[str, int]:
     """Return basic associative graph statistics."""
     return graph.stats()
+
+
+@router.get("/context/snapshot", response_model=ContextSnapshotResponse)
+def context_snapshot(
+    runtime: CognitionRuntime = Depends(get_cognition_runtime),
+    engine: ContextEngine = Depends(get_context_engine),
+) -> ContextSnapshotResponse:
+    """Return current contextual signals across temporal windows."""
+    state = runtime.get_state()
+    thoughts = state.working_memory + state.backlog
+    snapshot = engine.snapshot(thoughts)
+    return ContextSnapshotResponse(
+        immediate=snapshot.immediate,
+        daily=snapshot.daily,
+        long_term=snapshot.long_term,
+        activity_count=len(engine.activity_log.all_entries()),
+    )
+
+
+@router.post("/context/recalculate", response_model=CognitionStateResponse)
+def recalculate_context(
+    runtime: CognitionRuntime = Depends(get_cognition_runtime),
+) -> CognitionStateResponse:
+    """Force one contextual salience recalculation pass."""
+    runtime.recalculate_context()
+    return _build_state_response(runtime, _load_abstractions())

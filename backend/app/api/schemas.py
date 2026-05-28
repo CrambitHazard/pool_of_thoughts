@@ -19,6 +19,7 @@ ActivityType = Literal[
     "reflection_complete",
     "input_received",
     "graph_activated",
+    "context_recalculated",
 ]
 
 
@@ -55,3 +56,12 @@ class CognitionStateResponse(BaseModel):
     abstractions: list[MemoryAbstractionRead] = Field(default_factory=list)
     working_capacity: int
     tick_count: int
+
+
+class ContextSnapshotResponse(BaseModel):
+    """Active contextual signals across temporal windows."""
+
+    immediate: dict[str, float]
+    daily: dict[str, float]
+    long_term: dict[str, float]
+    activity_count: int

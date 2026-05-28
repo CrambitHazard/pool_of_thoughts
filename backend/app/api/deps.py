@@ -5,7 +5,9 @@ from functools import lru_cache
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.cognitive.thought_extraction import ThoughtExtractionService
+from app.cognitive.context.factory import build_context_engine
 from app.config.settings import Settings, get_settings
+from app.cognitive.context import ContextEngine
 from app.memory.consolidation import ConsolidationService
 from app.memory.graph import ThoughtGraph
 from app.memory.graph.clustering import ClusteringConfig
@@ -65,6 +67,16 @@ def get_thought_graph() -> ThoughtGraph:
 
 
 @lru_cache
+def get_context_engine() -> ContextEngine:
+    """Return a cached contextual salience engine.
+
+    Returns:
+        ContextEngine: Shared activity log and rule engine.
+    """
+    return build_context_engine(get_settings())
+
+
+@lru_cache
 def get_cognition_runtime() -> CognitionRuntime:
     """Return the shared in-process cognition runtime.
 
@@ -74,6 +86,7 @@ def get_cognition_runtime() -> CognitionRuntime:
     return CognitionRuntime(
         extraction_service=get_thought_extraction_service(),
         thought_graph=get_thought_graph(),
+        context_engine=get_context_engine(),
     )
 
 

@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Literal
 
 from app.cognitive.arbitrator import AttentionResult
+from app.cognitive.context import ContextEngine
 from app.cognitive.loop import CognitiveLoop, CognitiveLoopTickResult
 from app.cognitive.thought_extraction import ThoughtExtractionService
 from app.config.settings import get_settings
@@ -28,6 +29,7 @@ ActivityType = Literal[
     "reflection_complete",
     "input_received",
     "graph_activated",
+    "context_recalculated",
 ]
 
 
@@ -62,6 +64,7 @@ class CognitionRuntime:
         self,
         extraction_service: ThoughtExtractionService | None = None,
         thought_graph: ThoughtGraph | None = None,
+        context_engine: ContextEngine | None = None,
         max_activity: int = 50,
     ) -> None:
         """Initialize runtime memory stores and loops.
@@ -69,6 +72,7 @@ class CognitionRuntime:
         Args:
             extraction_service: Optional thought extraction service.
             thought_graph: Optional associative graph for linking and activation.
+            context_engine: Optional contextual salience engine.
             max_activity: Maximum activity feed entries to retain.
         """
         self.working_memory = WorkingMemoryManager()
@@ -76,6 +80,7 @@ class CognitionRuntime:
         self.loop = CognitiveLoop(self.working_memory, self.backlog)
         self.extraction_service = extraction_service
         self.thought_graph = thought_graph
+        self.context_engine = context_engine
         self.max_activity = max_activity
         self._activity: deque[ActivityEvent] = deque(maxlen=max_activity)
 
@@ -118,6 +123,7 @@ class CognitionRuntime:
             f"Input received: {message[:80]}",
             timestamp=current_time,
         )
+        self._record_activity("input_received", current_time, content_hint=message)
 
         extraction = await self.extraction_service.extract_from_message(message)
         for index, payload in enumerate(extraction.to_thought_creates()):
@@ -154,6 +160,7 @@ class CognitionRuntime:
 
         result = self.loop.tick(now=current_time)
         self._log_tick_events(result, before_working, before_backlog, current_time)
+        self._apply_contextual_salience(current_time)
         self._spread_activation(current_time)
 
         return self.get_state(current_time)
@@ -195,6 +202,12 @@ class CognitionRuntime:
             thought_id=thought_id,
         )
         self._log_attention_result(result)
+        self._record_activity(
+            "thought_added",
+            now,
+            thought_id=result.thought.id,
+            content_hint=result.thought.content,
+        )
         self._register_graph_links(result.thought, now)
         return result
 
@@ -392,3 +405,101 @@ class CognitionRuntime:
                 f"Spread activation from {source.id[:8]} boosted {changed} linked thoughts",
                 thought_id=source.id,
             )
+
+    def _record_activity(
+        self,
+        activity_type: str,
+        now: datetime,
+        *,
+        thought_id: str | None = None,
+        content_hint: str = "",
+    ) -> None:
+        """Record a behavioral event for contextual inference.
+
+        Args:
+            activity_type: Event classification.
+            now: Event timestamp.
+            thought_id: Related thought identifier.
+            content_hint: Short text for tag inference.
+
+        Returns:
+            None
+        """
+        if self.context_engine is None:
+            return
+
+        self.context_engine.activity_log.record(
+            activity_type,
+            now,
+            thought_id=thought_id,
+            content_hint=content_hint,
+        )
+
+    def _apply_contextual_salience(self, now: datetime) -> None:
+        """Recalculate salience from environmental and behavioral context.
+
+        Args:
+            now: Reference timestamp.
+
+        Returns:
+            None
+        """
+        if self.context_engine is None:
+            return
+
+        settings = get_settings()
+        if not settings.context_recalc_enabled:
+            return
+
+        if not self.context_engine.should_recalculate(now, settings.context_recalc_interval_minutes):
+            return
+
+        working = self.working_memory.all_thoughts()
+        backlog = self.backlog.list_active(now)
+        combined = working + backlog
+        if not combined:
+            return
+
+        updated, result = self.context_engine.recalculate(combined, now=now)
+        by_id = {thought.id: thought for thought in updated}
+
+        changed = 0
+        for thought in working:
+            adapted = by_id.get(thought.id)
+            if adapted is None or adapted.salience == thought.salience:
+                continue
+            self.working_memory.set_thought(adapted)
+            changed += 1
+
+        for thought in backlog:
+            adapted = by_id.get(thought.id)
+            if adapted is None or adapted.salience == thought.salience:
+                continue
+            self.backlog.enqueue(adapted)
+            changed += 1
+
+        if changed:
+            active_signals = ", ".join(
+                name
+                for name, strength in result.active_signals.items()
+                if strength > 0.0
+            )[:120]
+            self._log(
+                "context_recalculated",
+                f"Context adapted salience for {changed} thoughts ({active_signals})",
+            )
+
+    def recalculate_context(self, now: datetime | None = None) -> CognitionState:
+        """Force one contextual salience recalculation pass.
+
+        Args:
+            now: Reference timestamp.
+
+        Returns:
+            CognitionState: Updated cognitive state.
+        """
+        current_time = now or datetime.now()
+        if self.context_engine is not None:
+            self.context_engine.reset_recalc_timer()
+        self._apply_contextual_salience(current_time)
+        return self.get_state(current_time)

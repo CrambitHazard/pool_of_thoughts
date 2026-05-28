@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     graph_auto_link_threshold: float = 0.45
     graph_cluster_min_size: int = 2
     graph_cluster_limit: int = 100
+    context_recalc_enabled: bool = True
+    context_recalc_interval_minutes: float = 5.0
+    context_immediate_minutes: float = 30.0
+    context_daily_hours: float = 24.0
+    context_long_term_days: float = 14.0
+    context_max_adjustment: float = 0.25
+    context_recurring_min_occurrences: int = 3
 
 
 @lru_cache
