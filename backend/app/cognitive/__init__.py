@@ -7,12 +7,22 @@ from app.cognitive.resurfacing import (
     REPEATED_RELEVANCE_MIN_SALIENCE,
     ResurfacingStrategy,
 )
+from app.cognitive.thought_extraction import (
+    ExtractedThought,
+    ThoughtExtractionError,
+    ThoughtExtractionResult,
+    ThoughtExtractionService,
+)
 
 __all__ = [
     "CognitiveLoop",
     "CognitiveLoopTickResult",
+    "ExtractedThought",
     "NOVELTY_THRESHOLD",
     "REPEATED_RELEVANCE_MIN_RESURFACES",
     "REPEATED_RELEVANCE_MIN_SALIENCE",
     "ResurfacingStrategy",
+    "ThoughtExtractionError",
+    "ThoughtExtractionResult",
+    "ThoughtExtractionService",
 ]

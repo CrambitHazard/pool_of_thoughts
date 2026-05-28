@@ -60,7 +60,32 @@ App: http://localhost:3000
 | Backend  | Python, FastAPI         |
 | Frontend | Next.js, TypeScript     |
 | Database | SQLite (planned)        |
-| LLMs     | Ollama support (future) |
+| LLMs     | Ollama (`gemma:2b` default) |
+
+## Ollama configuration
+
+Install [Ollama](https://ollama.com/) and pull the default model:
+
+```bash
+ollama pull gemma:2b
+```
+
+Optional environment variables (prefix `ATTENTIONOS_`):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ATTENTIONOS_OLLAMA_MODEL` | `gemma:2b` | Model name |
+| `ATTENTIONOS_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API URL |
+| `ATTENTIONOS_OLLAMA_TEMPERATURE` | `0.0` | Sampling temperature |
+| `ATTENTIONOS_OLLAMA_MAX_RELATED_THOUGHTS` | `3` | Related thoughts cap |
+
+Extract thoughts from raw input:
+
+```bash
+curl -X POST http://localhost:8000/api/cognition/extract \
+  -H "Content-Type: application/json" \
+  -d "{\"message\": \"I need to finish the memory model draft\"}"
+```
 
 ## Development notes
 
